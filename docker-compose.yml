@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  converter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: docx-to-pdf-converter
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - CONVERTER_ENGINE=office
+      - LIBREOFFICE_BINARY_PATH=/usr/bin/soffice
+      - TEMPORARY_DIR=/app/temp
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - CONVERSION_TIMEOUT_MS=15000
+    restart: always
