@@ -25,7 +25,7 @@ appElement.innerHTML = `
       <div class="config-item">
         <span class="config-label">Conversion Engine</span>
         <div class="select-wrapper">
-          <select id="engine-select" class="custom-select">
+          <select id="engine-select" class="custom-select" disabled>
             <option value="office">LibreOffice Engine</option>
             <option value="native">Native JS Engine</option>
           </select>
@@ -36,7 +36,7 @@ appElement.innerHTML = `
         <div class="toggle-container">
           <span>Enable high fidelity</span>
           <label class="switch">
-            <input type="checkbox" id="metadata-toggle" checked>
+            <input type="checkbox" id="metadata-toggle" checked disabled>
             <span class="slider"></span>
           </label>
         </div>
@@ -159,8 +159,6 @@ function resetProgress() {
 async function handleConversion(filePath: string) {
   if (!filePath) return;
   lastSelectedFilePath = filePath;
-  resetProgress();
-  showState('converting');
 
   const engine = engineSelect.value;
   const preserveMetadata = metadataToggle.checked;
@@ -177,8 +175,12 @@ async function handleConversion(filePath: string) {
       successDetail.innerHTML = `Converted successfully in <strong>${(result.durationMs / 1000).toFixed(2)}s</strong>.<br/>Saved to: <span style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">${result.outputPath}</span>`;
       showState('success');
     } else {
-      errorDetail.innerText = result.errorMessage || 'Unknown conversion error occurred.';
-      showState('error');
+      if (result.errorMessage === 'USER_CANCELLED') {
+        showState('idle');
+      } else {
+        errorDetail.innerText = result.errorMessage || 'Unknown conversion error occurred.';
+        showState('error');
+      }
     }
   } catch (err: any) {
     errorDetail.innerText = err?.message || err || 'An unexpected application bridge error occurred.';
@@ -233,19 +235,45 @@ OnFileDrop((_x, _y, paths) => {
 }, true);
 
 // 4. Bind Real-time Go Backend events
+EventsOn('service_handshake', (status: boolean) => {
+  if (status) {
+    engineSelect.disabled = false;
+    metadataToggle.disabled = false;
+  }
+});
+
+EventsOn('dialog_confirmed', () => {
+  resetProgress();
+  showState('converting');
+});
+
 EventsOn('conversion_progress', (data: ConversionProgress) => {
   if (!data) return;
   
-  // Update progress bar width
-  const percentStr = `${Math.round(data.percentage)}%`;
-  progressBarFill.style.width = percentStr;
-  progressPercent.innerText = percentStr;
+  const stage = data.stage.toUpperCase();
+
+  // Handle indeterminate loader state
+  if (stage === 'CONVERTING') {
+    progressBarFill.classList.add('indeterminate');
+  } else {
+    progressBarFill.classList.remove('indeterminate');
+  }
+  
+  // Update progress bar width and text
+  if (stage === 'COMPLETED') {
+    progressBarFill.style.width = '100%';
+    progressPercent.innerText = '100%';
+  } else {
+    const percentStr = `${Math.round(data.percentage)}%`;
+    progressBarFill.style.width = percentStr;
+    progressPercent.innerText = percentStr;
+  }
   
   // Set stage title
   progressStage.innerText = data.stage;
   
   // Setup detailed progress message
-  switch (data.stage.toUpperCase()) {
+  switch (stage) {
     case 'PARSING':
       progressMessage.innerText = 'Extracting document layout and text structures...';
       break;

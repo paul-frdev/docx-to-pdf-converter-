@@ -327,6 +327,30 @@ input:checked + .slider:before {
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.progress-bar-fill.indeterminate {
+  width: 100% !important;
+  background: linear-gradient(90deg, 
+    var(--primary-color) 0%, 
+    #818cf8 25%, 
+    var(--primary-color) 50%, 
+    #818cf8 75%, 
+    var(--primary-color) 100%
+  );
+  background-size: 200% 100%;
+  animation: indeterminate-pulse 1.5s linear infinite;
+  transition: none !important;
+}
+
+@keyframes indeterminate-pulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+
 .progress-message {
   font-size: 0.875rem;
   color: var(--text-muted);

@@ -31,6 +31,12 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	if flag.Lookup("test.v") == nil {
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			wailsruntime.EventsEmit(ctx, "service_handshake", true)
+		}()
+	}
 }
 
 type AppConfigMetadata struct {
@@ -136,9 +142,13 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 		return &DesktopConversionResult{
 			Success:      false,
 			OutputPath:   "",
-			ErrorMessage: "Save dialog cancelled by user",
+			ErrorMessage: "USER_CANCELLED",
 			DurationMs:   time.Since(startTime).Milliseconds(),
 		}
+	}
+
+	if flag.Lookup("test.v") == nil {
+		wailsruntime.EventsEmit(a.ctx, "dialog_confirmed")
 	}
 
 
