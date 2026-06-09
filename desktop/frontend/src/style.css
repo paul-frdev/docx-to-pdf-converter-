@@ -331,11 +331,12 @@ input:checked + .slider:before {
 
 .progress-bar-fill.indeterminate {
     width: 100% !important;
-    height: 100% !important;
-    background: #0ea5e9 !important; /* Force visible primary base fill color */
+    height: 12px !important; /* Enforce exact physical height thickness */
+    background: #0ea5e9 !important; /* Force a solid vibrant primary blue fill as the track base */
     position: relative !important;
     overflow: hidden !important;
     transition: none !important;
+    border-radius: 8px !important;
 }
 
 .progress-bar-fill.indeterminate::after {
@@ -345,11 +346,7 @@ input:checked + .slider:before {
     left: 0;
     height: 100%;
     width: 200%;
-    background: linear-gradient(90deg, 
-        rgba(255, 255, 255, 0) 0%, 
-        rgba(255, 255, 255, 0.4) 50%, 
-        rgba(255, 255, 255, 0) 100%
-    );
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%);
     animation: shimmer 1.5s linear infinite;
 }
 

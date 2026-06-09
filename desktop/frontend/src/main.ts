@@ -364,8 +364,8 @@ EventsOn('conversion_progress', (data: ConversionProgress) => {
     }
   } else if (stage === 'CONVERTING') {
     if (progressBarFill) {
-      progressBarFill.style.width = "100%";
       progressBarFill.classList.add('indeterminate');
+      progressBarFill.style.width = "100%";
     }
     if (progressPercent) {
       progressPercent.style.display = '';
