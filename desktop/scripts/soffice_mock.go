@@ -24,8 +24,20 @@ func main() {
 			os.Exit(1)
 		}
 
+		// Determine the output PDF filename based on the input filename
+		pdfName := "input.pdf"
+		if len(os.Args) > 1 {
+			lastArg := os.Args[len(os.Args)-1]
+			// Make sure it doesn't look like a flag
+			if lastArg[0] != '-' {
+				baseName := filepath.Base(lastArg)
+				ext := filepath.Ext(baseName)
+				pdfName = baseName[:len(baseName)-len(ext)] + ".pdf"
+			}
+		}
+
 		// Write a valid mock PDF file
-		pdfPath := filepath.Join(outdir, "input.pdf")
+		pdfPath := filepath.Join(outdir, pdfName)
 		mockPdfContent := []byte("%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\nxref\n0 4\n0000000000 65535 f\n0000000009 00000 n\n0000000056 00000 n\n0000000111 00000 n\ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n190\n%%EOF\n")
 		
 		if err := os.WriteFile(pdfPath, mockPdfContent, 0644); err != nil {

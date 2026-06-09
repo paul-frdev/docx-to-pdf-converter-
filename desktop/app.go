@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,7 +51,59 @@ type DesktopConversionResult struct {
 func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopConversionResult {
 	startTime := time.Now()
 
-	// 1. Prompt user to choose where to save the final PDF
+	// 1. File validation: Size and magic signature check
+	stat, err := os.Stat(sourcePath)
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Failed to stat source file: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	const maxFileSize = 52428800 // 50 * 1024 * 1024
+	if stat.Size() > maxFileSize {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "FILE_TOO_LARGE: File size exceeds the maximum allowable limit of 50MB",
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	file, err := os.Open(sourcePath)
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Failed to open source file: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+	defer file.Close()
+
+	signature := make([]byte, 4)
+	if _, err := io.ReadFull(file, signature); err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "INVALID_DOCX_SIGNATURE: The provided file is not a valid OOXML document",
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	expectedSignature := []byte{0x50, 0x4B, 0x03, 0x04}
+	if !bytes.Equal(signature, expectedSignature) {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "INVALID_DOCX_SIGNATURE: The provided file is not a valid OOXML document",
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	// 2. Prompt user to choose where to save the final PDF
 	baseName := filepath.Base(sourcePath)
 	ext := filepath.Ext(baseName)
 	defaultPdfName := baseName[:len(baseName)-len(ext)] + ".pdf"
@@ -231,13 +285,12 @@ func (a *App) convertWithLibreOffice(sofficePath string, sourcePath string, save
 		"--headless",
 		"--invisible",
 		"--nolockcheck",
-		"--macroerror-policy=never",
 		"--nodefault",
 		"--nofirststartwizard",
 		"--norestore",
 		userInstFlag,
 		"--writer",
-		"--convert-to", "pdf:writer_pdf_Export:{\"SelectPdfVersion\":{\"type\":\"long\",\"value\":\"1\"},\"UseTaggedPDF\":{\"type\":\"boolean\",\"value\":\"true\"}}",
+		"--convert-to", "pdf:writer_pdf_Export",
 		"--outdir", absTempDir,
 		absTempInputPath,
 	)

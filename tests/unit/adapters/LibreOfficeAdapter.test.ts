@@ -60,7 +60,7 @@ describe('LibreOfficeConverterAdapter Unit Tests', () => {
       expect.arrayContaining([
         '--headless',
         '--convert-to',
-        'pdf:writer_pdf_Export:{"SelectPdfVersion":{"type":"long","value":"1"},"UseTaggedPDF":{"type":"boolean","value":"true"}}',
+        'pdf:writer_pdf_Export',
         '--outdir',
         mockConfig.temporaryDir
       ]),
