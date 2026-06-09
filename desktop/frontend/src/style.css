@@ -320,43 +320,26 @@ input:checked + .slider:before {
   position: relative;
 }
 
-.progress-bar-fill {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, var(--primary-color), #818cf8);
-  border-radius: 10px;
-  box-shadow: 0 0 10px var(--primary-glow);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
+.progress-bar-fill,
 .progress-bar-fill.indeterminate {
     width: 100% !important;
-    height: 12px !important; /* Enforce exact physical height thickness */
-    background: #0ea5e9 !important; /* Force a solid vibrant primary blue fill as the track base */
-    position: relative !important;
-    overflow: hidden !important;
-    transition: none !important;
+    height: 12px !important;
+    background: linear-gradient(90deg, #0ea5e9 0%, #818cf8 25%, #0ea5e9 50%, #818cf8 75%, #0ea5e9 100%) !important;
+    background-size: 200% 100% !important;
+    animation: continuousPulse 1.2s infinite linear !important;
     border-radius: 8px !important;
+    transition: none !important;
+    position: relative !important;
+    display: block !important;
 }
 
-.progress-bar-fill.indeterminate::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: 200%;
-    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%);
-    animation: shimmer 1.5s linear infinite;
-}
-
-@keyframes shimmer {
-    0% {
-        transform: translateX(-50%);
-    }
-    100% {
-        transform: translateX(0%);
-    }
+@keyframes continuousPulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
 }
 
 

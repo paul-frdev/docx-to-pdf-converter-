@@ -34,28 +34,7 @@ appElement.innerHTML = `
       <p>Offline, secure, high-fidelity desktop converter</p>
     </header>
 
-    <!-- Config Section -->
-    <div class="config-section" id="config-section">
-      <div class="config-item">
-        <span class="config-label">Conversion Engine</span>
-        <div class="select-wrapper">
-          <select id="engine-select" class="custom-select" disabled>
-            <option value="office">LibreOffice Engine</option>
-            <option value="native">Native JS Engine</option>
-          </select>
-        </div>
-      </div>
-      <div class="config-item">
-        <span class="config-label">Preserve Metadata</span>
-        <div class="toggle-container">
-          <span>Enable high fidelity</span>
-          <label class="switch">
-            <input type="checkbox" id="metadata-toggle" checked disabled>
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-    </div>
+
 
     <!-- Drag & Drop Zone -->
     <div class="drop-zone" id="drop-zone">
@@ -69,7 +48,7 @@ appElement.innerHTML = `
     <div class="progress-panel hidden" id="progress-panel">
       <div class="progress-header">
         <span class="progress-stage" id="progress-stage">Initializing...</span>
-        <span class="progress-percent" id="progress-percent">0%</span>
+        <span class="progress-percent" id="progress-percent"></span>
       </div>
       <div class="progress-bar-bg">
         <div class="progress-bar-fill" id="progress-bar-fill"></div>
@@ -104,7 +83,7 @@ appElement.innerHTML = `
 // Retrieve DOM references
 const dropZone = document.getElementById('drop-zone') as HTMLDivElement;
 const fileSelectBtn = document.getElementById('file-select-btn') as HTMLButtonElement;
-const configSection = document.getElementById('config-section') as HTMLDivElement;
+
 
 const progressPanel = document.getElementById('progress-panel') as HTMLDivElement;
 const progressStage = document.getElementById('progress-stage') as HTMLSpanElement;
@@ -122,8 +101,7 @@ const errorDetail = document.getElementById('error-detail') as HTMLParagraphElem
 const retryBtn = document.getElementById('retry-btn') as HTMLButtonElement;
 const convertMoreErrorBtn = document.getElementById('convert-more-error-btn') as HTMLButtonElement;
 
-const engineSelect = document.getElementById('engine-select') as HTMLSelectElement;
-const metadataToggle = document.getElementById('metadata-toggle') as HTMLInputElement;
+
 
 // Application State
 let lastSelectedFilePath = '';
@@ -140,7 +118,6 @@ function showState(state: 'idle' | 'converting' | 'success' | 'error') {
   }
   // Hide all dynamic panels by default
   dropZone.classList.add('hidden');
-  configSection.classList.add('hidden');
   progressPanel.classList.add('hidden');
   successPanel.classList.add('hidden');
   errorPanel.classList.add('hidden');
@@ -148,7 +125,6 @@ function showState(state: 'idle' | 'converting' | 'success' | 'error') {
   switch (state) {
     case 'idle':
       dropZone.classList.remove('hidden');
-      configSection.classList.remove('hidden');
       break;
     case 'converting':
       progressPanel.classList.remove('hidden');
@@ -172,7 +148,6 @@ function resetProgress() {
   }
   if (progressBarFill) {
     progressBarFill.classList.remove('indeterminate');
-    progressBarFill.style.width = '0%';
   }
   if (progressPercent) {
     progressPercent.style.display = 'none';
@@ -201,12 +176,9 @@ async function handleConversion(sourcePath: string) {
     dropZoneSub.innerText = "Opening Save Dialog... Please confirm destination.";
   }
 
-  const engine = engineSelect.value;
-  const preserveMetadata = metadataToggle.checked;
-
   const config = new main.AppConfigMetadata({
-    engine,
-    preserveMetadata
+    engine: "office",
+    preserveMetadata: true
   });
 
   try {
@@ -291,13 +263,7 @@ OnFileDrop((_x, _y, paths) => {
   }
 }, true);
 
-// 4. Bind Real-time Go Backend events
-EventsOn('service_handshake', (status: boolean) => {
-  if (status) {
-    engineSelect.disabled = false;
-    metadataToggle.disabled = false;
-  }
-});
+
 
 EventsOn("conversion_complete", (result: DesktopConversionResult) => {
   const dropZoneSub = dropZone?.querySelector('p');
@@ -311,11 +277,10 @@ EventsOn("conversion_complete", (result: DesktopConversionResult) => {
   if (result && result.success) {
     if (progressBarFill) {
       progressBarFill.classList.remove('indeterminate');
-      progressBarFill.style.width = "100%";
     }
     if (progressPercent) {
-      progressPercent.style.display = '';
-      progressPercent.textContent = "100%";
+      progressPercent.style.display = 'none';
+      progressPercent.textContent = '';
     }
     if (progressMessage) {
       progressMessage.textContent = "Conversion Complete!";
@@ -346,65 +311,28 @@ EventsOn('conversion_progress', (data: ConversionProgress) => {
   
   const stage = data.stage ? data.stage.toUpperCase() : '';
 
+  if (progressStage) {
+    progressStage.innerText = data.stage || '';
+  }
+  if (progressPercent) {
+    progressPercent.style.display = 'none';
+    progressPercent.textContent = '';
+  }
+
   if (stage === 'PARSING') {
-    if (progressBarFill) {
-      progressBarFill.classList.remove('indeterminate');
-      const percentStr = `${Math.round(data.percentage)}%`;
-      progressBarFill.style.width = percentStr;
-    }
-    if (progressPercent) {
-      progressPercent.style.display = '';
-      progressPercent.innerText = `${Math.round(data.percentage)}%`;
-    }
-    if (progressStage) {
-      progressStage.innerText = data.stage;
-    }
+    showState('converting');
     if (progressMessage) {
-      progressMessage.innerText = 'Extracting document layout and text structures...';
+      progressMessage.innerText = 'Reading document file structures...';
     }
   } else if (stage === 'CONVERTING') {
-    if (progressBarFill) {
-      progressBarFill.classList.add('indeterminate');
-      progressBarFill.style.width = "100%";
-    }
-    if (progressPercent) {
-      progressPercent.style.display = '';
-      progressPercent.textContent = "Processing...";
-    }
-    if (progressStage) {
-      progressStage.innerText = data.stage;
-    }
     if (progressMessage) {
-      progressMessage.innerText = 'Converting document layouts and embedding fonts...';
+      progressMessage.innerText = 'Converting document layouts and embedding fonts... Please wait.';
     }
   } else if (stage === 'COMPLETED') {
-    if (progressBarFill) {
-      progressBarFill.classList.remove('indeterminate');
-      progressBarFill.style.width = "100%";
-    }
-    if (progressPercent) {
-      progressPercent.style.display = '';
-      progressPercent.textContent = "100%";
-    }
-    if (progressStage) {
-      progressStage.innerText = data.stage;
-    }
     if (progressMessage) {
       progressMessage.innerText = 'Conversion Complete!';
     }
   } else {
-    if (progressBarFill) {
-      progressBarFill.classList.remove('indeterminate');
-      const percentStr = `${Math.round(data.percentage)}%`;
-      progressBarFill.style.width = percentStr;
-    }
-    if (progressPercent) {
-      progressPercent.style.display = '';
-      progressPercent.innerText = `${Math.round(data.percentage)}%`;
-    }
-    if (progressStage) {
-      progressStage.innerText = data.stage;
-    }
     if (progressMessage) {
       progressMessage.innerText = `Running stage: ${data.stage}...`;
     }
