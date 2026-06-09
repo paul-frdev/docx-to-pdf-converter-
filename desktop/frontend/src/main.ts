@@ -101,11 +101,14 @@ const errorDetail = document.getElementById('error-detail') as HTMLParagraphElem
 const retryBtn = document.getElementById('retry-btn') as HTMLButtonElement;
 const convertMoreErrorBtn = document.getElementById('convert-more-error-btn') as HTMLButtonElement;
 
+window.addEventListener('dragover', (e) => e.preventDefault(), false);
+window.addEventListener('drop', (e) => e.preventDefault(), false);
+
 
 
 // Application State
 let lastSelectedFilePath = '';
-let currentOutputPath = '';
+let lastGeneratedPdfPath = '';
 let successTimeoutId: any = null;
 
 /**
@@ -235,30 +238,41 @@ dropZone.addEventListener('click', async () => {
 });
 
 // 2. Drag over hover state visual feedback
-dropZone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  dropZone.classList.add('drag-over');
-});
+if (dropZone) {
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+    dropZone.classList.add('active');
+  });
 
-dropZone.addEventListener('dragleave', () => {
-  dropZone.classList.remove('drag-over');
-});
+  dropZone.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+    dropZone.classList.add('active');
+  });
 
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropZone.classList.remove('drag-over');
-  // Actual path extraction is handled globally by Wails OnFileDrop callback
-});
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+    dropZone.classList.remove('active');
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    dropZone.classList.remove('active');
+    // Actual path extraction is handled globally by Wails OnFileDrop callback
+  });
+}
 
 // 3. Register Wails Native File Drop Interceptor
-OnFileDrop((_x, _y, paths) => {
+OnFileDrop((_x: number, _y: number, paths: string[]) => {
   if (paths && paths.length > 0) {
-    const targetFile = paths[0];
-    if (targetFile.toLowerCase().endsWith('.docx')) {
-      handleConversion(targetFile);
-    } else {
-      errorDetail.innerText = 'Invalid file type. Please drag and drop a valid .docx file.';
-      showState('error');
+    const droppedPath = paths[0];
+    const isDocx = droppedPath.toLowerCase().endsWith('.docx');
+
+    if (isDocx) {
+      // Seamlessly dispatch the validated file path into our asynchronous Goroutine pipeline
+      handleConversion(droppedPath);
     }
   }
 }, true);
@@ -286,7 +300,7 @@ EventsOn("conversion_complete", (result: DesktopConversionResult) => {
       progressMessage.textContent = "Conversion Complete!";
     }
 
-    currentOutputPath = result.outputPath;
+    lastGeneratedPdfPath = result.outputPath;
     if (successDetail) {
       successDetail.innerHTML = `Converted successfully in <strong>${(result.durationMs / 1000).toFixed(2)}s</strong>.<br/>Saved to: <span style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">${result.outputPath}</span>`;
     }
@@ -340,24 +354,32 @@ EventsOn('conversion_progress', (data: ConversionProgress) => {
 });
 
 // 5. Button Actions
-openFolderBtn.addEventListener('click', () => {
-  if (currentOutputPath) {
-    OpenFileLocation(currentOutputPath);
-  }
-});
+if (openFolderBtn) {
+  openFolderBtn.addEventListener('click', async () => {
+    if (lastGeneratedPdfPath) {
+      await OpenFileLocation(lastGeneratedPdfPath);
+    }
+  });
+}
 
-convertMoreSuccessBtn.addEventListener('click', () => {
-  showState('idle');
-});
-
-convertMoreErrorBtn.addEventListener('click', () => {
-  showState('idle');
-});
-
-retryBtn.addEventListener('click', () => {
-  if (lastSelectedFilePath) {
-    handleConversion(lastSelectedFilePath);
-  } else {
+if (convertMoreSuccessBtn) {
+  convertMoreSuccessBtn.addEventListener('click', () => {
     showState('idle');
-  }
-});
+  });
+}
+
+if (convertMoreErrorBtn) {
+  convertMoreErrorBtn.addEventListener('click', () => {
+    showState('idle');
+  });
+}
+
+if (retryBtn) {
+  retryBtn.addEventListener('click', () => {
+    if (lastSelectedFilePath) {
+      handleConversion(lastSelectedFilePath);
+    } else {
+      showState('idle');
+    }
+  });
+}

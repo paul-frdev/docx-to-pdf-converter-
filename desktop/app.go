@@ -483,10 +483,24 @@ func getEmbeddedOfficePath() (string, error) {
 	}
 }
 
-// OpenFileLocation opens the folder containing the file in Finder/Explorer
-func (a *App) OpenFileLocation(outputPath string) {
-	dir := filepath.Dir(outputPath)
-	wailsruntime.BrowserOpenURL(a.ctx, dir)
+// OpenFileLocation opens the folder containing the file in Finder/Explorer and highlights the file
+func (a *App) OpenFileLocation(targetPath string) {
+	var cmd *exec.Cmd
+
+	switch goRuntime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", "-R", targetPath)
+	case "windows":
+		cmd = exec.Command("explorer.exe", "/select,", filepath.Clean(targetPath))
+	default:
+		dir := filepath.Dir(targetPath)
+		wailsruntime.BrowserOpenURL(a.ctx, dir)
+		return
+	}
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Warning: Failed to open file location for %s: %v\n", targetPath, err)
+	}
 }
 
 // SelectFile opens a native file dialog to choose a DOCX file
