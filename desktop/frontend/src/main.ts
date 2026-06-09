@@ -364,8 +364,8 @@ EventsOn('conversion_progress', (data: ConversionProgress) => {
     }
   } else if (stage === 'CONVERTING') {
     if (progressBarFill) {
-      progressBarFill.classList.add('indeterminate');
       progressBarFill.style.width = "100%";
+      progressBarFill.classList.add('indeterminate');
     }
     if (progressPercent) {
       progressPercent.style.display = '';
@@ -380,11 +380,11 @@ EventsOn('conversion_progress', (data: ConversionProgress) => {
   } else if (stage === 'COMPLETED') {
     if (progressBarFill) {
       progressBarFill.classList.remove('indeterminate');
-      progressBarFill.style.width = '100%';
+      progressBarFill.style.width = "100%";
     }
     if (progressPercent) {
       progressPercent.style.display = '';
-      progressPercent.textContent = '100%';
+      progressPercent.textContent = "100%";
     }
     if (progressStage) {
       progressStage.innerText = data.stage;
