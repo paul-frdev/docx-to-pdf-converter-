@@ -101,8 +101,19 @@ const errorDetail = document.getElementById('error-detail') as HTMLParagraphElem
 const retryBtn = document.getElementById('retry-btn') as HTMLButtonElement;
 const convertMoreErrorBtn = document.getElementById('convert-more-error-btn') as HTMLButtonElement;
 
-window.addEventListener('dragover', (e) => e.preventDefault(), false);
-window.addEventListener('drop', (e) => e.preventDefault(), false);
+window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+}, false);
+
+window.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dropZone) {
+        dropZone.classList.remove('drag-over');
+        dropZone.classList.remove('active');
+    }
+}, false);
 
 
 
@@ -239,42 +250,32 @@ dropZone.addEventListener('click', async () => {
 
 // 2. Drag over hover state visual feedback
 if (dropZone) {
-  dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('drag-over');
-    dropZone.classList.add('active');
-  });
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('drag-over');
+        dropZone.classList.add('active'); // Optional glow feedback
+    }, false);
 
-  dropZone.addEventListener('dragenter', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('drag-over');
-    dropZone.classList.add('active');
-  });
-
-  dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('drag-over');
-    dropZone.classList.remove('active');
-  });
-
-  dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    dropZone.classList.remove('active');
-    // Actual path extraction is handled globally by Wails OnFileDrop callback
-  });
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('drag-over');
+        dropZone.classList.remove('active');
+    }, false);
 }
 
 // 3. Register Wails Native File Drop Interceptor
 OnFileDrop((_x: number, _y: number, paths: string[]) => {
-  if (paths && paths.length > 0) {
-    const droppedPath = paths[0];
-    const isDocx = droppedPath.toLowerCase().endsWith('.docx');
-
-    if (isDocx) {
-      // Seamlessly dispatch the validated file path into our asynchronous Goroutine pipeline
-      handleConversion(droppedPath);
+    if (paths && paths.length > 0) {
+        const absolutePath = paths[0]; // Wails native returns full OS path here
+        const isDocx = absolutePath.toLowerCase().endsWith('.docx');
+        
+        if (isDocx) {
+            // Route the verified absolute path straight into the background Goroutine pipeline
+            handleConversion(absolutePath);
+        }
     }
-  }
 }, true);
 
 
