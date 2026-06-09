@@ -6,6 +6,8 @@
   
   --primary-color: #0ea5e9;
   --primary-glow: rgba(14, 165, 233, 0.45);
+  --primary: var(--primary-color);
+  --accent: #818cf8;
   --success-color: #10b981;
   --success-glow: rgba(16, 185, 129, 0.45);
   --danger-color: #ef4444;
@@ -329,24 +331,34 @@ input:checked + .slider:before {
 
 .progress-bar-fill.indeterminate {
   width: 100% !important;
-  background: linear-gradient(90deg, 
-    var(--primary-color) 0%, 
-    #818cf8 25%, 
-    var(--primary-color) 50%, 
-    #818cf8 75%, 
-    var(--primary-color) 100%
-  );
-  background-size: 200% 100%;
-  animation: indeterminate-pulse 1.5s linear infinite;
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: none !important;
   transition: none !important;
 }
 
-@keyframes indeterminate-pulse {
+.progress-bar-fill.indeterminate::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 200%;
+  background: linear-gradient(90deg, 
+    var(--primary) 0%, 
+    var(--accent) 50%, 
+    var(--primary) 100%
+  );
+  animation: shimmer 1.5s linear infinite;
+}
+
+@keyframes shimmer {
   0% {
-    background-position: 200% 0;
+    transform: translateX(-50%);
   }
   100% {
-    background-position: 0 0;
+    transform: translateX(0%);
   }
 }
 

@@ -147,10 +147,20 @@ function showState(state: 'idle' | 'converting' | 'success' | 'error') {
  * Reset progress indicators to baseline values
  */
 function resetProgress() {
-  progressBarFill.style.width = '0%';
-  progressPercent.innerText = '0%';
-  progressStage.innerText = 'Initializing...';
-  progressMessage.innerText = 'Preparing document...';
+  if (progressBarFill) {
+    progressBarFill.classList.remove('indeterminate');
+    progressBarFill.style.width = '0%';
+  }
+  if (progressPercent) {
+    progressPercent.style.display = '';
+    progressPercent.innerText = '0%';
+  }
+  if (progressStage) {
+    progressStage.innerText = 'Initializing...';
+  }
+  if (progressMessage) {
+    progressMessage.innerText = 'Preparing document...';
+  }
 }
 
 /**
@@ -172,8 +182,12 @@ async function handleConversion(filePath: string) {
     const result = await ConvertFile(filePath, config);
     if (result.success) {
       currentOutputPath = result.outputPath;
-      successDetail.innerHTML = `Converted successfully in <strong>${(result.durationMs / 1000).toFixed(2)}s</strong>.<br/>Saved to: <span style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">${result.outputPath}</span>`;
-      showState('success');
+      if (successDetail) {
+        successDetail.innerHTML = `Converted successfully in <strong>${(result.durationMs / 1000).toFixed(2)}s</strong>.<br/>Saved to: <span style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">${result.outputPath}</span>`;
+      }
+      setTimeout(() => {
+        showState('success');
+      }, 300);
     } else {
       if (result.errorMessage === 'USER_CANCELLED') {
         showState('idle');
@@ -250,41 +264,69 @@ EventsOn('dialog_confirmed', () => {
 EventsOn('conversion_progress', (data: ConversionProgress) => {
   if (!data) return;
   
-  const stage = data.stage.toUpperCase();
+  const stage = data.stage ? data.stage.toUpperCase() : '';
 
-  // Handle indeterminate loader state
-  if (stage === 'CONVERTING') {
-    progressBarFill.classList.add('indeterminate');
-  } else {
-    progressBarFill.classList.remove('indeterminate');
-  }
-  
-  // Update progress bar width and text
-  if (stage === 'COMPLETED') {
-    progressBarFill.style.width = '100%';
-    progressPercent.innerText = '100%';
-  } else {
-    const percentStr = `${Math.round(data.percentage)}%`;
-    progressBarFill.style.width = percentStr;
-    progressPercent.innerText = percentStr;
-  }
-  
-  // Set stage title
-  progressStage.innerText = data.stage;
-  
-  // Setup detailed progress message
-  switch (stage) {
-    case 'PARSING':
+  if (stage === 'PARSING') {
+    if (progressBarFill) {
+      progressBarFill.classList.remove('indeterminate');
+      const percentStr = `${Math.round(data.percentage)}%`;
+      progressBarFill.style.width = percentStr;
+    }
+    if (progressPercent) {
+      progressPercent.style.display = '';
+      progressPercent.innerText = `${Math.round(data.percentage)}%`;
+    }
+    if (progressStage) {
+      progressStage.innerText = data.stage;
+    }
+    if (progressMessage) {
       progressMessage.innerText = 'Extracting document layout and text structures...';
-      break;
-    case 'CONVERTING':
-      progressMessage.innerText = 'Generating PDF output stream...';
-      break;
-    case 'COMPLETED':
-      progressMessage.innerText = 'Finalizing file stream write...';
-      break;
-    default:
+    }
+  } else if (stage === 'CONVERTING') {
+    if (progressBarFill) {
+      progressBarFill.classList.add('indeterminate');
+    }
+    if (progressPercent) {
+      progressPercent.style.display = 'none';
+      progressPercent.innerText = '';
+    }
+    if (progressStage) {
+      progressStage.innerText = data.stage;
+    }
+    if (progressMessage) {
+      progressMessage.innerText = 'Converting layout and embedding fonts... Please wait.';
+    }
+  } else if (stage === 'COMPLETED') {
+    if (progressBarFill) {
+      progressBarFill.classList.remove('indeterminate');
+      progressBarFill.style.width = '100%';
+    }
+    if (progressPercent) {
+      progressPercent.style.display = '';
+      progressPercent.innerText = '100%';
+    }
+    if (progressStage) {
+      progressStage.innerText = data.stage;
+    }
+    if (progressMessage) {
+      progressMessage.innerText = 'Conversion Complete!';
+    }
+  } else {
+    if (progressBarFill) {
+      progressBarFill.classList.remove('indeterminate');
+      const percentStr = `${Math.round(data.percentage)}%`;
+      progressBarFill.style.width = percentStr;
+    }
+    if (progressPercent) {
+      progressPercent.style.display = '';
+      progressPercent.innerText = `${Math.round(data.percentage)}%`;
+    }
+    if (progressStage) {
+      progressStage.innerText = data.stage;
+    }
+    if (progressMessage) {
       progressMessage.innerText = `Running stage: ${data.stage}...`;
+    }
   }
 });
 
