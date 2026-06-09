@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	goRuntime "runtime"
+	"strings"
 	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -138,19 +141,6 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 		}
 	}
 
-	// Emit State: PARSING
-	wailsruntime.EventsEmit(a.ctx, "conversion_progress", ConversionProgress{
-		Stage:      "PARSING",
-		Percentage: 33.3,
-	})
-	time.Sleep(100 * time.Millisecond)
-
-	// Emit State: CONVERTING
-	wailsruntime.EventsEmit(a.ctx, "conversion_progress", ConversionProgress{
-		Stage:      "CONVERTING",
-		Percentage: 66.6,
-	})
-	time.Sleep(100 * time.Millisecond)
 
 	// OS-level conversion switch
 	switch goos := goRuntime.GOOS; goos {
@@ -201,12 +191,6 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 		}
 	}
 
-	// Emit State: COMPLETED
-	wailsruntime.EventsEmit(a.ctx, "conversion_progress", ConversionProgress{
-		Stage:      "COMPLETED",
-		Percentage: 100.0,
-	})
-	time.Sleep(100 * time.Millisecond)
 
 	duration := time.Since(startTime).Milliseconds()
 
@@ -295,12 +279,37 @@ func (a *App) convertWithLibreOffice(sofficePath string, sourcePath string, save
 		absTempInputPath,
 	)
 	cmd.Dir = filepath.Dir(sofficePath)
-	output, err := cmd.CombinedOutput()
+	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return &DesktopConversionResult{
 			Success:      false,
 			OutputPath:   "",
-			ErrorMessage: fmt.Sprintf("LibreOffice conversion failed: %s. Output: %s", err.Error(), string(output)),
+			ErrorMessage: "Failed to create stdout pipe: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	if err := cmd.Start(); err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Failed to start LibreOffice: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	stdoutBufString := a.scanStdoutAndEmit(stdoutPipe)
+
+	err = cmd.Wait()
+	combinedOutput := stdoutBufString + stderrBuf.String()
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: fmt.Sprintf("LibreOffice conversion failed: %s. Output: %s", err.Error(), combinedOutput),
 			DurationMs:   time.Since(startTime).Milliseconds(),
 		}
 	}
@@ -341,6 +350,36 @@ func (a *App) convertWithLibreOffice(sofficePath string, sourcePath string, save
 		ErrorMessage: "",
 		DurationMs:   time.Since(startTime).Milliseconds(),
 	}
+}
+
+// scanStdoutAndEmit reads lines from the execution pipe and emits Wails events
+func (a *App) scanStdoutAndEmit(reader io.Reader) string {
+	var stdoutBuf bytes.Buffer
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		stdoutBuf.WriteString(line + "\n")
+
+		if strings.Contains(line, "[STATUS]: PARSING") {
+			a.emitProgress("PARSING", 33.3)
+		} else if strings.Contains(line, "[STATUS]: CONVERTING") {
+			a.emitProgress("CONVERTING", 66.6)
+		} else if strings.Contains(line, "[STATUS]: COMPLETED") {
+			a.emitProgress("COMPLETED", 100.0)
+		}
+	}
+	return stdoutBuf.String()
+}
+
+// emitProgress safely emits progress events, skipping empty contexts or unit tests
+func (a *App) emitProgress(stage string, percentage float64) {
+	if a.ctx == nil {
+		return
+	}
+	if flag.Lookup("test.v") != nil {
+		return
+	}
+	wailsruntime.EventsEmit(a.ctx, "conversion_progress", ConversionProgress{Stage: stage, Percentage: percentage})
 }
 
 // getEmbeddedOfficePath resolves the path to the embedded or system LibreOffice binary

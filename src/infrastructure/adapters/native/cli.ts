@@ -18,8 +18,12 @@ async function main() {
       process.exit(1);
     }
 
+    process.stdout.write("[STATUS]: PARSING\n");
+
     const docxBuffer = fs.readFileSync(inputPath);
     const adapter = new NativeConverterAdapter();
+
+    process.stdout.write("[STATUS]: CONVERTING\n");
     const pdfBuffer = await adapter.convert(docxBuffer);
 
     // Ensure target directory exists
@@ -29,7 +33,7 @@ async function main() {
     }
 
     fs.writeFileSync(outputPath, pdfBuffer);
-    console.log(`Successfully converted ${inputPath} to ${outputPath}`);
+    process.stdout.write("[STATUS]: COMPLETED\n");
     process.exit(0);
   } catch (error: any) {
     console.error(`Conversion failed: ${error.message}`);

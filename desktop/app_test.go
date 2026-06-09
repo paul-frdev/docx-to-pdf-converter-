@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +73,20 @@ func TestConvertFile_Validation(t *testing.T) {
 	expectedErrorSig := "INVALID_DOCX_SIGNATURE: The provided file is not a valid OOXML document"
 	if res.ErrorMessage != expectedErrorSig {
 		t.Errorf("Expected error %q, got %q", expectedErrorSig, res.ErrorMessage)
+	}
+}
+
+func TestScanStdoutAndEmit(t *testing.T) {
+	app := NewApp()
+	app.ctx = context.Background()
+
+	inputStr := "Some initial output\n[STATUS]: PARSING\nSome intermediate log\n[STATUS]: CONVERTING\nAnother log line\n[STATUS]: COMPLETED\nFinal log line\n"
+	reader := strings.NewReader(inputStr)
+
+	stdoutCollected := app.scanStdoutAndEmit(reader)
+
+	expectedCollected := "Some initial output\n[STATUS]: PARSING\nSome intermediate log\n[STATUS]: CONVERTING\nAnother log line\n[STATUS]: COMPLETED\nFinal log line\n"
+	if stdoutCollected != expectedCollected {
+		t.Errorf("Expected collected stdout to be %q, got %q", expectedCollected, stdoutCollected)
 	}
 }
