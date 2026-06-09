@@ -12,7 +12,8 @@ jest.mock('fs', () => ({
     writeFile: jest.fn(),
     readFile: jest.fn(),
     unlink: jest.fn(),
-    access: jest.fn()
+    access: jest.fn(),
+    rm: jest.fn()
   }
 }));
 
@@ -37,6 +38,7 @@ describe('LibreOfficeConverterAdapter Unit Tests', () => {
     );
     (fs.promises.unlink as unknown as jest.Mock).mockResolvedValue(undefined);
     (fs.promises.access as unknown as jest.Mock).mockResolvedValue(undefined);
+    (fs.promises.rm as unknown as jest.Mock).mockResolvedValue(undefined);
 
     adapter = new LibreOfficeConverterAdapter(mockConfig);
   });
@@ -58,7 +60,7 @@ describe('LibreOfficeConverterAdapter Unit Tests', () => {
       expect.arrayContaining([
         '--headless',
         '--convert-to',
-        'pdf',
+        'pdf:writer_pdf_Export:{"SelectPdfVersion":{"type":"long","value":"1"},"UseTaggedPDF":{"type":"boolean","value":"true"}}',
         '--outdir',
         mockConfig.temporaryDir
       ]),

@@ -24,6 +24,7 @@ export class LibreOfficeConverterAdapter implements IConverterService {
 
     const inputFilePath = path.join(this.config.temporaryDir, `${uuid}.docx`);
     const outputFilePath = path.join(this.config.temporaryDir, `${uuid}.pdf`);
+    const userInstDir = path.join(this.config.temporaryDir, `${uuid}_profile`);
 
     Logger.info(
       `Starting LibreOffice conversion. Input: ${inputFilePath}, preserveMetadata: ${options?.preserveMetadata}`
@@ -38,12 +39,23 @@ export class LibreOfficeConverterAdapter implements IConverterService {
 
       // 2. Setup the conversion promise wrapping the child process execution
       const conversionPromise = new Promise<Buffer>((resolve, reject) => {
+        const absProfilePath = path.resolve(userInstDir).replace(/\\/g, '/');
+        const userInstFlag = `-env:UserInstallation=file://${process.platform === 'win32' && !absProfilePath.startsWith('/') ? '/' : ''}${absProfilePath}`;
+
         const args = [
           '--headless',
+          '--invisible',
+          '--nolockcheck',
+          '--macroerror-policy=never',
+          '--nodefault',
+          '--nofirststartwizard',
+          '--norestore',
+          userInstFlag,
+          '--writer',
           '--convert-to',
-          'pdf',
+          'pdf:writer_pdf_Export:{"SelectPdfVersion":{"type":"long","value":"1"},"UseTaggedPDF":{"type":"boolean","value":"true"}}',
           '--outdir',
-          this.config.temporaryDir,
+          path.resolve(this.config.temporaryDir),
           inputFilePath
         ];
 
@@ -116,6 +128,14 @@ export class LibreOfficeConverterAdapter implements IConverterService {
         }
       } catch (err) {
         Logger.warn(`Failed to clean up temporary output file: ${outputFilePath}`, err);
+      }
+
+      try {
+        if (fs.existsSync(userInstDir)) {
+          await fs.promises.rm(userInstDir, { recursive: true, force: true });
+        }
+      } catch (err) {
+        Logger.warn(`Failed to clean up temporary profile directory: ${userInstDir}`, err);
       }
     }
   }

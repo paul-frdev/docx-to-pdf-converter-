@@ -6,9 +6,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goRuntime "runtime"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -44,7 +45,7 @@ type DesktopConversionResult struct {
 	DurationMs   int64  `json:"durationMs"`
 }
 
-// ConvertFile handles the desktop conversion simulation
+// ConvertFile handles the desktop conversion using native OS layout engines
 func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopConversionResult {
 	startTime := time.Now()
 
@@ -53,11 +54,11 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 	ext := filepath.Ext(baseName)
 	defaultPdfName := baseName[:len(baseName)-len(ext)] + ".pdf"
 
-	savePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	savePath, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
 		Title:            "Save Converted PDF",
 		DefaultDirectory: filepath.Dir(sourcePath),
 		DefaultFilename:  defaultPdfName,
-		Filters: []runtime.FileFilter{
+		Filters: []wailsruntime.FileFilter{
 			{
 				DisplayName: "PDF Files (*.pdf)",
 				Pattern:     "*.pdf",
@@ -83,64 +84,75 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 		}
 	}
 
-	// 2. Simulate conversion progress stages
-	// Stage 1: PARSING (33.3%)
-	runtime.EventsEmit(a.ctx, "conversion_progress", ConversionProgress{
+	// Emit State: PARSING
+	wailsruntime.EventsEmit(a.ctx, "conversion_progress", ConversionProgress{
 		Stage:      "PARSING",
 		Percentage: 33.3,
 	})
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
-	// Stage 2: CONVERTING (66.6%)
-	runtime.EventsEmit(a.ctx, "conversion_progress", ConversionProgress{
+	// Emit State: CONVERTING
+	wailsruntime.EventsEmit(a.ctx, "conversion_progress", ConversionProgress{
 		Stage:      "CONVERTING",
 		Percentage: 66.6,
 	})
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
-	// Stage 3: COMPLETED (100.0%)
-	runtime.EventsEmit(a.ctx, "conversion_progress", ConversionProgress{
+	// OS-level conversion switch
+	switch goos := goRuntime.GOOS; goos {
+	case "darwin":
+		sofficePath, err := getEmbeddedOfficePath()
+		if err != nil {
+			return &DesktopConversionResult{
+				Success:      false,
+				OutputPath:   "",
+				ErrorMessage: err.Error(),
+				DurationMs:   time.Since(startTime).Milliseconds(),
+			}
+		}
+		res := a.convertWithLibreOffice(sofficePath, sourcePath, savePath, startTime)
+		if !res.Success {
+			return res
+		}
+
+	case "windows":
+		sofficePath, err := getEmbeddedOfficePath()
+		if err == nil {
+			res := a.convertWithLibreOffice(sofficePath, sourcePath, savePath, startTime)
+			if res.Success {
+				break
+			}
+			// If LibreOffice conversion failed, fall back to Word COM automation
+		}
+
+		// Fallback to Windows COM Automation via powershell script
+		psCmd := fmt.Sprintf(`$word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open('%s'); $doc.SaveAs([ref] '%s', [ref] 17); $doc.Close(); $word.Quit();`, sourcePath, savePath)
+		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psCmd)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return &DesktopConversionResult{
+				Success:      false,
+				OutputPath:   "",
+				ErrorMessage: fmt.Sprintf("Windows Word COM Automation failed: %s. Output: %s", err.Error(), string(output)),
+				DurationMs:   time.Since(startTime).Milliseconds(),
+			}
+		}
+
+	default:
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Unsupported operating system engine: " + goos,
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	// Emit State: COMPLETED
+	wailsruntime.EventsEmit(a.ctx, "conversion_progress", ConversionProgress{
 		Stage:      "COMPLETED",
 		Percentage: 100.0,
 	})
-	time.Sleep(500 * time.Millisecond)
-
-	// 3. Find the CLI script dynamically
-	cliPaths := []string{
-		"dist/infrastructure/adapters/native/cli.js",
-		"../dist/infrastructure/adapters/native/cli.js",
-		"/Users/admin/Desktop/docx-to-pdf-converter/dist/infrastructure/adapters/native/cli.js",
-		"/Users/admin/Desktop/docx-to-pdf-converter:/dist/infrastructure/adapters/native/cli.js",
-	}
-
-	var cliPath string
-	for _, p := range cliPaths {
-		if _, err := os.Stat(p); err == nil {
-			cliPath = p
-			break
-		}
-	}
-
-	if cliPath == "" {
-		return &DesktopConversionResult{
-			Success:      false,
-			OutputPath:   "",
-			ErrorMessage: "Could not locate Node.js converter CLI script (dist/infrastructure/adapters/native/cli.js)",
-			DurationMs:   time.Since(startTime).Milliseconds(),
-		}
-	}
-
-	// 4. Run the Node.js subprocess to do the conversion
-	cmd := exec.Command("node", cliPath, sourcePath, savePath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return &DesktopConversionResult{
-			Success:      false,
-			OutputPath:   "",
-			ErrorMessage: fmt.Sprintf("Node.js conversion process failed: %s. Output: %s", err.Error(), string(output)),
-			DurationMs:   time.Since(startTime).Milliseconds(),
-		}
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	duration := time.Since(startTime).Milliseconds()
 
@@ -152,17 +164,206 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 	}
 }
 
+// convertWithLibreOffice executes LibreOffice CLI to convert a DOCX file to PDF
+func (a *App) convertWithLibreOffice(sofficePath string, sourcePath string, savePath string, startTime time.Time) *DesktopConversionResult {
+	// Create a temp directory for conversion to bypass write/path isolation issues
+	tempDir, err := os.MkdirTemp("", "docx-to-pdf")
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Failed to create temporary directory: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+	defer os.RemoveAll(tempDir)
+
+	tempInputPath := filepath.Join(tempDir, "input.docx")
+	inputData, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Failed to read source document: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+	err = os.WriteFile(tempInputPath, inputData, 0644)
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Failed to prepare document for conversion: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	// Setup isolated user installation folder in temp directory to prevent locking issues
+	userInstDir := filepath.Join(tempDir, "profile")
+	slashPath := filepath.ToSlash(userInstDir)
+	if goRuntime.GOOS == "windows" {
+		if len(slashPath) > 0 && slashPath[0] != '/' {
+			slashPath = "/" + slashPath
+		}
+	}
+	userInstFlag := "-env:UserInstallation=file://" + slashPath
+
+	absTempDir, err := filepath.Abs(tempDir)
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Failed to resolve absolute path of temporary directory: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+	absTempInputPath, err := filepath.Abs(tempInputPath)
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Failed to resolve absolute path of source document: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	cmd := exec.Command(sofficePath,
+		"--headless",
+		"--invisible",
+		"--nolockcheck",
+		"--macroerror-policy=never",
+		"--nodefault",
+		"--nofirststartwizard",
+		"--norestore",
+		userInstFlag,
+		"--writer",
+		"--convert-to", "pdf:writer_pdf_Export:{\"SelectPdfVersion\":{\"type\":\"long\",\"value\":\"1\"},\"UseTaggedPDF\":{\"type\":\"boolean\",\"value\":\"true\"}}",
+		"--outdir", absTempDir,
+		absTempInputPath,
+	)
+	cmd.Dir = filepath.Dir(sofficePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: fmt.Sprintf("LibreOffice conversion failed: %s. Output: %s", err.Error(), string(output)),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	tempPdfPath := filepath.Join(tempDir, "input.pdf")
+	if _, err := os.Stat(tempPdfPath); os.IsNotExist(err) {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "LibreOffice did not generate output PDF file",
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	pdfData, err := os.ReadFile(tempPdfPath)
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Failed to read converted PDF data: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	err = os.WriteFile(savePath, pdfData, 0644)
+	if err != nil {
+		return &DesktopConversionResult{
+			Success:      false,
+			OutputPath:   "",
+			ErrorMessage: "Failed to save PDF to selected location: " + err.Error(),
+			DurationMs:   time.Since(startTime).Milliseconds(),
+		}
+	}
+
+	return &DesktopConversionResult{
+		Success:      true,
+		OutputPath:   savePath,
+		ErrorMessage: "",
+		DurationMs:   time.Since(startTime).Milliseconds(),
+	}
+}
+
+// getEmbeddedOfficePath resolves the path to the embedded or system LibreOffice binary
+func getEmbeddedOfficePath() (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
+		return "", err
+	}
+	exeDir := filepath.Dir(exePath)
+
+	switch goRuntime.GOOS {
+	case "darwin":
+		// Check macOS app bundle resources
+		embeddedPath := filepath.Clean(filepath.Join(exeDir, "..", "Resources", "libreoffice", "soffice"))
+		if _, err := os.Stat(embeddedPath); err == nil {
+			return embeddedPath, nil
+		}
+		// Fallback to standard system installation
+		systemPath := "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+		if _, err := os.Stat(systemPath); err == nil {
+			return systemPath, nil
+		}
+		return "", fmt.Errorf("embedded LibreOffice not found at %s and system LibreOffice not found at %s", embeddedPath, systemPath)
+
+	case "windows":
+		// Check Windows nested directory structure relative to the binary
+		embeddedPath1 := filepath.Join(exeDir, "libreoffice", "program", "soffice.exe")
+		if _, err := os.Stat(embeddedPath1); err == nil {
+			return embeddedPath1, nil
+		}
+		embeddedPath2 := filepath.Join(exeDir, "libreoffice", "soffice.exe")
+		if _, err := os.Stat(embeddedPath2); err == nil {
+			return embeddedPath2, nil
+		}
+
+		// Fallback to standard Windows system installation
+		programFiles := os.Getenv("ProgramFiles")
+		if programFiles == "" {
+			programFiles = "C:\\Program Files"
+		}
+		systemPath1 := filepath.Join(programFiles, "LibreOffice", "program", "soffice.exe")
+		if _, err := os.Stat(systemPath1); err == nil {
+			return systemPath1, nil
+		}
+
+		programFilesX86 := os.Getenv("ProgramFiles(x86)")
+		if programFilesX86 == "" {
+			programFilesX86 = "C:\\Program Files (x86)"
+		}
+		systemPath2 := filepath.Join(programFilesX86, "LibreOffice", "program", "soffice.exe")
+		if _, err := os.Stat(systemPath2); err == nil {
+			return systemPath2, nil
+		}
+
+		return "", fmt.Errorf("embedded LibreOffice not found at %s and system LibreOffice not found", embeddedPath1)
+
+	default:
+		return "", fmt.Errorf("unsupported platform: %s", goRuntime.GOOS)
+	}
+}
+
 // OpenFileLocation opens the folder containing the file in Finder/Explorer
 func (a *App) OpenFileLocation(outputPath string) {
 	dir := filepath.Dir(outputPath)
-	runtime.BrowserOpenURL(a.ctx, dir)
+	wailsruntime.BrowserOpenURL(a.ctx, dir)
 }
 
 // SelectFile opens a native file dialog to choose a DOCX file
 func (a *App) SelectFile() string {
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	path, err := wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title: "Select Word Document",
-		Filters: []runtime.FileFilter{
+		Filters: []wailsruntime.FileFilter{
 			{
 				DisplayName: "Word Documents (*.docx)",
 				Pattern:     "*.docx",
@@ -174,5 +375,3 @@ func (a *App) SelectFile() string {
 	}
 	return path
 }
-
-
