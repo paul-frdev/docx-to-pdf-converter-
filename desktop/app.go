@@ -58,7 +58,7 @@ type DesktopConversionResult struct {
 
 // ConvertFile handles the desktop conversion using native OS layout engines
 func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopConversionResult {
-	startTime := time.Now()
+	conversionStartTime := time.Now()
 
 	// 1. File validation: Size and magic signature check
 	stat, err := os.Stat(sourcePath)
@@ -67,7 +67,7 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 			Success:      false,
 			OutputPath:   "",
 			ErrorMessage: "Failed to stat source file: " + err.Error(),
-			DurationMs:   time.Since(startTime).Milliseconds(),
+			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
 		}
 	}
 
@@ -77,7 +77,7 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 			Success:      false,
 			OutputPath:   "",
 			ErrorMessage: "FILE_TOO_LARGE: File size exceeds the maximum allowable limit of 50MB",
-			DurationMs:   time.Since(startTime).Milliseconds(),
+			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
 		}
 	}
 
@@ -87,7 +87,7 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 			Success:      false,
 			OutputPath:   "",
 			ErrorMessage: "Failed to open source file: " + err.Error(),
-			DurationMs:   time.Since(startTime).Milliseconds(),
+			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
 		}
 	}
 	defer file.Close()
@@ -98,7 +98,7 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 			Success:      false,
 			OutputPath:   "",
 			ErrorMessage: "INVALID_DOCX_SIGNATURE: The provided file is not a valid OOXML document",
-			DurationMs:   time.Since(startTime).Milliseconds(),
+			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
 		}
 	}
 
@@ -108,7 +108,7 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 			Success:      false,
 			OutputPath:   "",
 			ErrorMessage: "INVALID_DOCX_SIGNATURE: The provided file is not a valid OOXML document",
-			DurationMs:   time.Since(startTime).Milliseconds(),
+			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
 		}
 	}
 
@@ -134,7 +134,7 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 			Success:      false,
 			OutputPath:   "",
 			ErrorMessage: "Failed to open save dialog: " + err.Error(),
-			DurationMs:   time.Since(startTime).Milliseconds(),
+			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
 		}
 	}
 
@@ -143,23 +143,23 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 			Success:      false,
 			OutputPath:   "",
 			ErrorMessage: "USER_CANCELLED",
-			DurationMs:   time.Since(startTime).Milliseconds(),
+			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
 		}
 	}
 
 	// Spin off background goroutine to execute conversion
-	go a.executeBackgroundConversion(sourcePath, savePath, config)
+	go a.executeBackgroundConversion(sourcePath, savePath, config, conversionStartTime)
 
 	return &DesktopConversionResult{
 		Success:      true,
 		OutputPath:   "",
 		ErrorMessage: "CONVERSION_STARTED",
-		DurationMs:   time.Since(startTime).Milliseconds(),
+		DurationMs:   time.Since(conversionStartTime).Milliseconds(),
 	}
 }
 
 // executeBackgroundConversion executes conversion in a background goroutine
-func (a *App) executeBackgroundConversion(sourcePath string, savePath string, config AppConfigMetadata) {
+func (a *App) executeBackgroundConversion(sourcePath string, savePath string, config AppConfigMetadata, conversionStartTime time.Time) {
 	startTime := time.Now()
 
 	// OS-level conversion switch
@@ -167,16 +167,19 @@ func (a *App) executeBackgroundConversion(sourcePath string, savePath string, co
 	case "darwin":
 		sofficePath, err := getEmbeddedOfficePath()
 		if err != nil {
+			elapsedMs := time.Since(conversionStartTime).Milliseconds()
 			a.emitConversionComplete(&DesktopConversionResult{
 				Success:      false,
 				OutputPath:   "",
 				ErrorMessage: err.Error(),
-				DurationMs:   time.Since(startTime).Milliseconds(),
+				DurationMs:   elapsedMs,
 			})
 			return
 		}
 		res := a.convertWithLibreOffice(sofficePath, sourcePath, savePath, startTime)
 		if !res.Success {
+			elapsedMs := time.Since(conversionStartTime).Milliseconds()
+			res.DurationMs = elapsedMs
 			a.emitConversionComplete(res)
 			return
 		}
@@ -196,31 +199,33 @@ func (a *App) executeBackgroundConversion(sourcePath string, savePath string, co
 		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psCmd)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
+			elapsedMs := time.Since(conversionStartTime).Milliseconds()
 			a.emitConversionComplete(&DesktopConversionResult{
 				Success:      false,
 				OutputPath:   "",
 				ErrorMessage: fmt.Sprintf("Windows Word COM Automation failed: %s. Output: %s", err.Error(), string(output)),
-				DurationMs:   time.Since(startTime).Milliseconds(),
+				DurationMs:   elapsedMs,
 			})
 			return
 		}
 
 	default:
+		elapsedMs := time.Since(conversionStartTime).Milliseconds()
 		a.emitConversionComplete(&DesktopConversionResult{
 			Success:      false,
 			OutputPath:   "",
 			ErrorMessage: "Unsupported operating system engine: " + goos,
-			DurationMs:   time.Since(startTime).Milliseconds(),
+			DurationMs:   elapsedMs,
 		})
 		return
 	}
 
-	duration := time.Since(startTime).Milliseconds()
+	elapsedMs := time.Since(conversionStartTime).Milliseconds()
 	a.emitConversionComplete(&DesktopConversionResult{
 		Success:      true,
 		OutputPath:   savePath,
 		ErrorMessage: "",
-		DurationMs:   duration,
+		DurationMs:   elapsedMs,
 	})
 }
 

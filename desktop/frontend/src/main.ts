@@ -212,6 +212,11 @@ async function handleConversion(sourcePath: string) {
   try {
     const initResult = await window.go.main.App.ConvertFile(sourcePath, config);
 
+    if (initResult.success) {
+      showState('converting');
+      resetProgress();
+    }
+
     if (fileSelectBtn) {
       fileSelectBtn.innerText = "Select File";
     }
@@ -219,10 +224,7 @@ async function handleConversion(sourcePath: string) {
       dropZoneSub.innerText = "Supports files up to 25MB";
     }
 
-    if (initResult.success) {
-      showState('converting');
-      resetProgress();
-    } else {
+    if (!initResult.success) {
       if (initResult.errorMessage === 'USER_CANCELLED') {
         showState('idle');
       } else {
@@ -366,8 +368,8 @@ EventsOn('conversion_progress', (data: ConversionProgress) => {
       progressBarFill.style.width = "100%";
     }
     if (progressPercent) {
-      progressPercent.style.display = 'none';
-      progressPercent.textContent = '';
+      progressPercent.style.display = '';
+      progressPercent.textContent = "Processing...";
     }
     if (progressStage) {
       progressStage.innerText = data.stage;
