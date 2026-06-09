@@ -1,9 +1,23 @@
 import './style.css';
 import './app.css';
 
-import { ConvertFile, SelectFile, OpenFileLocation } from '../wailsjs/go/main/App';
+import { SelectFile, OpenFileLocation } from '../wailsjs/go/main/App';
 import { EventsOn, OnFileDrop } from '../wailsjs/runtime/runtime';
 import { main } from '../wailsjs/go/models';
+
+type DesktopConversionResult = main.DesktopConversionResult;
+
+declare global {
+  interface Window {
+    go: {
+      main: {
+        App: {
+          ConvertFile: (sourcePath: string, config: main.AppConfigMetadata) => Promise<DesktopConversionResult>;
+        };
+      };
+    };
+  }
+}
 
 // Interface for progress events
 interface ConversionProgress {
@@ -114,11 +128,16 @@ const metadataToggle = document.getElementById('metadata-toggle') as HTMLInputEl
 // Application State
 let lastSelectedFilePath = '';
 let currentOutputPath = '';
+let successTimeoutId: any = null;
 
 /**
  * Transitions UI states based on active conversions
  */
 function showState(state: 'idle' | 'converting' | 'success' | 'error') {
+  if (state !== 'success' && successTimeoutId) {
+    clearTimeout(successTimeoutId);
+    successTimeoutId = null;
+  }
   // Hide all dynamic panels by default
   dropZone.classList.add('hidden');
   configSection.classList.add('hidden');
@@ -147,13 +166,17 @@ function showState(state: 'idle' | 'converting' | 'success' | 'error') {
  * Reset progress indicators to baseline values
  */
 function resetProgress() {
+  if (successTimeoutId) {
+    clearTimeout(successTimeoutId);
+    successTimeoutId = null;
+  }
   if (progressBarFill) {
     progressBarFill.classList.remove('indeterminate');
     progressBarFill.style.width = '0%';
   }
   if (progressPercent) {
-    progressPercent.style.display = '';
-    progressPercent.innerText = '0%';
+    progressPercent.style.display = 'none';
+    progressPercent.textContent = '';
   }
   if (progressStage) {
     progressStage.innerText = 'Initializing...';
@@ -166,9 +189,17 @@ function resetProgress() {
 /**
  * Triggers conversion process via Go App binding
  */
-async function handleConversion(filePath: string) {
-  if (!filePath) return;
-  lastSelectedFilePath = filePath;
+async function handleConversion(sourcePath: string) {
+  if (!sourcePath) return;
+  lastSelectedFilePath = sourcePath;
+
+  const dropZoneSub = dropZone?.querySelector('p');
+  if (fileSelectBtn) {
+    fileSelectBtn.innerText = "Opening Save Dialog... Please confirm destination.";
+  }
+  if (dropZoneSub) {
+    dropZoneSub.innerText = "Opening Save Dialog... Please confirm destination.";
+  }
 
   const engine = engineSelect.value;
   const preserveMetadata = metadataToggle.checked;
@@ -179,24 +210,34 @@ async function handleConversion(filePath: string) {
   });
 
   try {
-    const result = await ConvertFile(filePath, config);
-    if (result.success) {
-      currentOutputPath = result.outputPath;
-      if (successDetail) {
-        successDetail.innerHTML = `Converted successfully in <strong>${(result.durationMs / 1000).toFixed(2)}s</strong>.<br/>Saved to: <span style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">${result.outputPath}</span>`;
-      }
-      setTimeout(() => {
-        showState('success');
-      }, 300);
+    const initResult = await window.go.main.App.ConvertFile(sourcePath, config);
+
+    if (fileSelectBtn) {
+      fileSelectBtn.innerText = "Select File";
+    }
+    if (dropZoneSub) {
+      dropZoneSub.innerText = "Supports files up to 25MB";
+    }
+
+    if (initResult.success) {
+      showState('converting');
+      resetProgress();
     } else {
-      if (result.errorMessage === 'USER_CANCELLED') {
+      if (initResult.errorMessage === 'USER_CANCELLED') {
         showState('idle');
       } else {
-        errorDetail.innerText = result.errorMessage || 'Unknown conversion error occurred.';
+        errorDetail.innerText = initResult.errorMessage || 'Unknown conversion error occurred.';
         showState('error');
       }
     }
   } catch (err: any) {
+    if (fileSelectBtn) {
+      fileSelectBtn.innerText = "Select File";
+    }
+    if (dropZoneSub) {
+      dropZoneSub.innerText = "Supports files up to 25MB";
+    }
+
     errorDetail.innerText = err?.message || err || 'An unexpected application bridge error occurred.';
     showState('error');
   }
@@ -256,9 +297,46 @@ EventsOn('service_handshake', (status: boolean) => {
   }
 });
 
-EventsOn('dialog_confirmed', () => {
-  resetProgress();
-  showState('converting');
+EventsOn("conversion_complete", (result: DesktopConversionResult) => {
+  const dropZoneSub = dropZone?.querySelector('p');
+  if (fileSelectBtn) {
+    fileSelectBtn.innerText = "Select File";
+  }
+  if (dropZoneSub) {
+    dropZoneSub.innerText = "Supports files up to 25MB";
+  }
+
+  if (result && result.success) {
+    if (progressBarFill) {
+      progressBarFill.classList.remove('indeterminate');
+      progressBarFill.style.width = "100%";
+    }
+    if (progressPercent) {
+      progressPercent.style.display = '';
+      progressPercent.textContent = "100%";
+    }
+    if (progressMessage) {
+      progressMessage.textContent = "Conversion Complete!";
+    }
+
+    currentOutputPath = result.outputPath;
+    if (successDetail) {
+      successDetail.innerHTML = `Converted successfully in <strong>${(result.durationMs / 1000).toFixed(2)}s</strong>.<br/>Saved to: <span style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">${result.outputPath}</span>`;
+    }
+    
+    if (successTimeoutId) {
+      clearTimeout(successTimeoutId);
+    }
+    successTimeoutId = setTimeout(() => {
+      showState('success');
+    }, 300);
+  } else {
+    const errorMsg = result?.errorMessage || 'Unknown conversion error occurred.';
+    if (errorDetail) {
+      errorDetail.textContent = errorMsg;
+    }
+    showState('error');
+  }
 });
 
 EventsOn('conversion_progress', (data: ConversionProgress) => {
@@ -285,16 +363,17 @@ EventsOn('conversion_progress', (data: ConversionProgress) => {
   } else if (stage === 'CONVERTING') {
     if (progressBarFill) {
       progressBarFill.classList.add('indeterminate');
+      progressBarFill.style.width = "100%";
     }
     if (progressPercent) {
       progressPercent.style.display = 'none';
-      progressPercent.innerText = '';
+      progressPercent.textContent = '';
     }
     if (progressStage) {
       progressStage.innerText = data.stage;
     }
     if (progressMessage) {
-      progressMessage.innerText = 'Converting layout and embedding fonts... Please wait.';
+      progressMessage.innerText = 'Converting document layouts and embedding fonts...';
     }
   } else if (stage === 'COMPLETED') {
     if (progressBarFill) {
@@ -303,7 +382,7 @@ EventsOn('conversion_progress', (data: ConversionProgress) => {
     }
     if (progressPercent) {
       progressPercent.style.display = '';
-      progressPercent.innerText = '100%';
+      progressPercent.textContent = '100%';
     }
     if (progressStage) {
       progressStage.innerText = data.stage;

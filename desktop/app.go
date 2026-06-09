@@ -147,26 +147,38 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 		}
 	}
 
-	if flag.Lookup("test.v") == nil {
-		wailsruntime.EventsEmit(a.ctx, "dialog_confirmed")
-	}
+	// Spin off background goroutine to execute conversion
+	go a.executeBackgroundConversion(sourcePath, savePath, config)
 
+	return &DesktopConversionResult{
+		Success:      true,
+		OutputPath:   "",
+		ErrorMessage: "CONVERSION_STARTED",
+		DurationMs:   time.Since(startTime).Milliseconds(),
+	}
+}
+
+// executeBackgroundConversion executes conversion in a background goroutine
+func (a *App) executeBackgroundConversion(sourcePath string, savePath string, config AppConfigMetadata) {
+	startTime := time.Now()
 
 	// OS-level conversion switch
 	switch goos := goRuntime.GOOS; goos {
 	case "darwin":
 		sofficePath, err := getEmbeddedOfficePath()
 		if err != nil {
-			return &DesktopConversionResult{
+			a.emitConversionComplete(&DesktopConversionResult{
 				Success:      false,
 				OutputPath:   "",
 				ErrorMessage: err.Error(),
 				DurationMs:   time.Since(startTime).Milliseconds(),
-			}
+			})
+			return
 		}
 		res := a.convertWithLibreOffice(sofficePath, sourcePath, savePath, startTime)
 		if !res.Success {
-			return res
+			a.emitConversionComplete(res)
+			return
 		}
 
 	case "windows":
@@ -184,32 +196,43 @@ func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopC
 		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psCmd)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return &DesktopConversionResult{
+			a.emitConversionComplete(&DesktopConversionResult{
 				Success:      false,
 				OutputPath:   "",
 				ErrorMessage: fmt.Sprintf("Windows Word COM Automation failed: %s. Output: %s", err.Error(), string(output)),
 				DurationMs:   time.Since(startTime).Milliseconds(),
-			}
+			})
+			return
 		}
 
 	default:
-		return &DesktopConversionResult{
+		a.emitConversionComplete(&DesktopConversionResult{
 			Success:      false,
 			OutputPath:   "",
 			ErrorMessage: "Unsupported operating system engine: " + goos,
 			DurationMs:   time.Since(startTime).Milliseconds(),
-		}
+		})
+		return
 	}
 
-
 	duration := time.Since(startTime).Milliseconds()
-
-	return &DesktopConversionResult{
+	a.emitConversionComplete(&DesktopConversionResult{
 		Success:      true,
 		OutputPath:   savePath,
 		ErrorMessage: "",
 		DurationMs:   duration,
+	})
+}
+
+// emitConversionComplete emits the final conversion completion event to the Wails frontend
+func (a *App) emitConversionComplete(result *DesktopConversionResult) {
+	if a.ctx == nil {
+		return
 	}
+	if flag.Lookup("test.v") != nil {
+		return
+	}
+	wailsruntime.EventsEmit(a.ctx, "conversion_complete", result)
 }
 
 // convertWithLibreOffice executes LibreOffice CLI to convert a DOCX file to PDF
