@@ -465,6 +465,6 @@ input:checked + .slider:before {
     background: rgba(255, 255, 255, 0.03) !important;
     pointer-events: none !important; 
 }
-.drop-zone * {
-    pointer-events: none !important; /* Block all child node text/icons from eating the mouse event */
+.drop-zone.dragging-active * {
+    pointer-events: none !important; /* Block all child node text/icons from eating the mouse event during dragging */
 }

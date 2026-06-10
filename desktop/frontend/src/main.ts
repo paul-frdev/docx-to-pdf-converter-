@@ -103,14 +103,15 @@ window.addEventListener('dragover', (e) => {
 
 window.addEventListener('dragleave', (e) => {
     e.preventDefault();
-    // If mouse leaves the application window boundaries, clear layout highlights
-    if (e.clientX === 0 && e.clientY === 0 && dropZone) {
-        dropZone.classList.remove('dragging-active');
+    // Clear layout highlights when leaving window boundaries or if there's no related target
+    if ((e.clientX === 0 && e.clientY === 0) || !e.relatedTarget) {
+        if (dropZone) dropZone.classList.remove('dragging-active');
     }
 }, false);
 
 window.addEventListener('drop', (e) => {
     e.preventDefault();
+    if (dropZone) dropZone.classList.remove('dragging-active');
 }, false);
 
 
@@ -135,6 +136,11 @@ function showState(state: 'idle' | 'converting' | 'success' | 'error') {
   progressPanel.classList.add('hidden');
   successPanel.classList.add('hidden');
   errorPanel.classList.add('hidden');
+
+  // Clean dragging state to prevent it from getting stuck
+  if (dropZone) {
+    dropZone.classList.remove('dragging-active');
+  }
 
   switch (state) {
     case 'idle':
