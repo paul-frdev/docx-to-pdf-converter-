@@ -474,3 +474,13 @@ input:checked + .slider:before {
 .hidden {
   display: none !important;
 }
+
+/* This guarantees Chromium drops layout interception, letting the OS pass the file directly to Wails */
+.drop-zone.dragging-active {
+    border-color: #818cf8 !important;
+    background: rgba(129, 140, 248, 0.1) !important;
+    pointer-events: none !important; 
+}
+.drop-zone * {
+    pointer-events: none !important; /* Block all child node text/icons from eating the mouse event */
+}

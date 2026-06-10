@@ -103,7 +103,15 @@ const convertMoreErrorBtn = document.getElementById('convert-more-error-btn') as
 
 window.addEventListener('dragover', (e) => {
     e.preventDefault();
-    e.stopPropagation();
+    if (dropZone) dropZone.classList.add('dragging-active');
+}, false);
+
+window.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    // If mouse leaves the application window boundaries, clear layout highlights
+    if (e.clientX === 0 && e.clientY === 0 && dropZone) {
+        dropZone.classList.remove('dragging-active');
+    }
 }, false);
 
 
@@ -241,48 +249,18 @@ dropZone.addEventListener('click', async () => {
   }
 });
 
-// 2. Drag over hover state visual feedback
-if (dropZone) {
-  dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropZone.classList.add('drag-over');
-    dropZone.classList.add('active');
-  }, false);
-
-  dropZone.addEventListener('dragenter', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropZone.classList.add('drag-over');
-    dropZone.classList.add('active');
-  }, false);
-
-  dropZone.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropZone.classList.remove('drag-over');
-    dropZone.classList.remove('active');
-  }, false);
-}
-
 // 3. Register Wails Native File Drop Interceptor
 OnFileDrop((_x: number, _y: number, paths: string[]) => {
-  // Visual reset of the target drop bounding box layout
-  const dropZoneEl = document.getElementById('drop-zone');
-  if (dropZoneEl) {
-    dropZoneEl.classList.remove('active');
-    dropZoneEl.classList.remove('drag-over');
-  }
+  // Instantly clean up visual focus states once the OS registers the dropped payload
+  if (dropZone) dropZone.classList.remove('dragging-active');
 
   if (paths && paths.length > 0) {
-    const cleanAbsolutePath = paths[0]; // Wails native guarantees the raw un-encoded full OS system path here
+    const cleanAbsolutePath = paths[0]; // Wails native guarantees unencoded true absolute OS path
     const isDocx = cleanAbsolutePath.toLowerCase().endsWith('.docx');
     
     if (isDocx) {
-      // Log for local debug verification inside 'wails dev' terminal stream
-      console.log("[FRONTEND] Native file drop detected absolute path:", cleanAbsolutePath);
-      
-      // Dispatch the verified system location string directly to the async Goroutine backend
+      console.log("[RUNTIME] Safe Wails Native Drop Path Resolution:", cleanAbsolutePath);
+      // Route the absolute locator string directly into the background asynchronous Goroutine pipeline
       handleConversion(cleanAbsolutePath);
     }
   }
