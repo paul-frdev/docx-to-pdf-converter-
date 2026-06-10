@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function ConvertFile(arg1:string,arg2:main.AppConfigMetadata):Promise<void>;
 
+export function GetModelDefinitions():Promise<main.DesktopConversionResult>;
+
 export function OpenFileLocation(arg1:string):Promise<void>;
 
 export function SelectFile():Promise<string>;

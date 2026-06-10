@@ -49,9 +49,7 @@ appElement.innerHTML = `
       <div class="progress-header">
         <span class="progress-stage" id="progress-stage">Initializing...</span>
       </div>
-      <div class="spinner-container">
-        <div class="infinite-spinner"></div>
-      </div>
+      <div class="infinite-spinner"></div>
       <div class="progress-message" id="progress-message">Waiting to start conversion...</div>
     </div>
 

@@ -40,6 +40,12 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 
+// GetModelDefinitions is a dummy method to ensure Wails generates TypeScript
+// definitions for DesktopConversionResult in models.ts.
+func (a *App) GetModelDefinitions() DesktopConversionResult {
+	return DesktopConversionResult{}
+}
+
 type AppConfigMetadata struct {
 	PreserveMetadata bool   `json:"preserveMetadata"`
 	Engine           string `json:"engine"`

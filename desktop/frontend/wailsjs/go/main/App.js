@@ -6,6 +6,10 @@ export function ConvertFile(arg1, arg2) {
   return window['go']['main']['App']['ConvertFile'](arg1, arg2);
 }
 
+export function GetModelDefinitions() {
+  return window['go']['main']['App']['GetModelDefinitions']();
+}
+
 export function OpenFileLocation(arg1) {
   return window['go']['main']['App']['OpenFileLocation'](arg1);
 }
