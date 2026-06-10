@@ -109,6 +109,10 @@ window.addEventListener('dragleave', (e) => {
     }
 }, false);
 
+window.addEventListener('drop', (e) => {
+    e.preventDefault();
+}, false);
+
 
 
 
@@ -189,7 +193,7 @@ async function handleConversion(sourcePath: string) {
 
   try {
     // ConvertFile runs completely asynchronously and returns void
-    await window.go.main.App.ConvertFile(sourcePath, config);
+    window.go.main.App.ConvertFile(sourcePath, config);
   } catch (err: any) {
     if (fileSelectBtn) {
       fileSelectBtn.innerText = "Select File";
@@ -235,7 +239,7 @@ OnFileDrop((_x: number, _y: number, paths: string[]) => {
       handleConversion(cleanAbsolutePath);
     }
   }
-}, true);
+}, false);
 
 
 
