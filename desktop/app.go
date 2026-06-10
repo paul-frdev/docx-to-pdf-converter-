@@ -19,7 +19,8 @@ import (
 
 // App struct
 type App struct {
-	ctx context.Context
+	ctx                context.Context
+	onConversionResult func(result *DesktopConversionResult)
 }
 
 // NewApp creates a new App application struct
@@ -57,110 +58,116 @@ type DesktopConversionResult struct {
 }
 
 // ConvertFile handles the desktop conversion using native OS layout engines
-func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) *DesktopConversionResult {
-	conversionStartTime := time.Now()
+func (a *App) ConvertFile(sourcePath string, config AppConfigMetadata) {
+	go func() {
+		conversionStartTime := time.Now()
 
-	// 1. File validation: Size and magic signature check
-	stat, err := os.Stat(sourcePath)
-	if err != nil {
-		return &DesktopConversionResult{
-			Success:      false,
-			OutputPath:   "",
-			ErrorMessage: "Failed to stat source file: " + err.Error(),
-			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+		// 1. File validation: Size and magic signature check
+		stat, err := os.Stat(sourcePath)
+		if err != nil {
+			a.emitConversionResult(&DesktopConversionResult{
+				Success:      false,
+				OutputPath:   "",
+				ErrorMessage: "Failed to stat source file: " + err.Error(),
+				DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+			})
+			return
 		}
-	}
 
-	const maxFileSize = 52428800 // 50 * 1024 * 1024
-	if stat.Size() > maxFileSize {
-		return &DesktopConversionResult{
-			Success:      false,
-			OutputPath:   "",
-			ErrorMessage: "FILE_TOO_LARGE: File size exceeds the maximum allowable limit of 50MB",
-			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+		const maxFileSize = 52428800 // 50 * 1024 * 1024
+		if stat.Size() > maxFileSize {
+			a.emitConversionResult(&DesktopConversionResult{
+				Success:      false,
+				OutputPath:   "",
+				ErrorMessage: "FILE_TOO_LARGE: File size exceeds the maximum allowable limit of 50MB",
+				DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+			})
+			return
 		}
-	}
 
-	file, err := os.Open(sourcePath)
-	if err != nil {
-		return &DesktopConversionResult{
-			Success:      false,
-			OutputPath:   "",
-			ErrorMessage: "Failed to open source file: " + err.Error(),
-			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+		file, err := os.Open(sourcePath)
+		if err != nil {
+			a.emitConversionResult(&DesktopConversionResult{
+				Success:      false,
+				OutputPath:   "",
+				ErrorMessage: "Failed to open source file: " + err.Error(),
+				DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+			})
+			return
 		}
-	}
-	defer file.Close()
 
-	signature := make([]byte, 4)
-	if _, err := io.ReadFull(file, signature); err != nil {
-		return &DesktopConversionResult{
-			Success:      false,
-			OutputPath:   "",
-			ErrorMessage: "INVALID_DOCX_SIGNATURE: The provided file is not a valid OOXML document",
-			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+		signature := make([]byte, 4)
+		_, readErr := io.ReadFull(file, signature)
+		file.Close()
+
+		if readErr != nil {
+			a.emitConversionResult(&DesktopConversionResult{
+				Success:      false,
+				OutputPath:   "",
+				ErrorMessage: "INVALID_DOCX_SIGNATURE: The provided file is not a valid OOXML document",
+				DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+			})
+			return
 		}
-	}
 
-	expectedSignature := []byte{0x50, 0x4B, 0x03, 0x04}
-	if !bytes.Equal(signature, expectedSignature) {
-		return &DesktopConversionResult{
-			Success:      false,
-			OutputPath:   "",
-			ErrorMessage: "INVALID_DOCX_SIGNATURE: The provided file is not a valid OOXML document",
-			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+		expectedSignature := []byte{0x50, 0x4B, 0x03, 0x04}
+		if !bytes.Equal(signature, expectedSignature) {
+			a.emitConversionResult(&DesktopConversionResult{
+				Success:      false,
+				OutputPath:   "",
+				ErrorMessage: "INVALID_DOCX_SIGNATURE: The provided file is not a valid OOXML document",
+				DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+			})
+			return
 		}
-	}
 
-	// 2. Prompt user to choose where to save the final PDF
-	baseName := filepath.Base(sourcePath)
-	ext := filepath.Ext(baseName)
-	defaultPdfName := baseName[:len(baseName)-len(ext)] + ".pdf"
+		// 2. Prompt user to choose where to save the final PDF
+		baseName := filepath.Base(sourcePath)
+		ext := filepath.Ext(baseName)
+		defaultPdfName := baseName[:len(baseName)-len(ext)] + ".pdf"
 
-	savePath, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
-		Title:            "Save Converted PDF",
-		DefaultDirectory: filepath.Dir(sourcePath),
-		DefaultFilename:  defaultPdfName,
-		Filters: []wailsruntime.FileFilter{
-			{
-				DisplayName: "PDF Files (*.pdf)",
-				Pattern:     "*.pdf",
+		savePath, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+			Title:            "Save Converted PDF",
+			DefaultDirectory: filepath.Dir(sourcePath),
+			DefaultFilename:  defaultPdfName,
+			Filters: []wailsruntime.FileFilter{
+				{
+					DisplayName: "PDF Files (*.pdf)",
+					Pattern:     "*.pdf",
+				},
 			},
-		},
-	})
+		})
 
-	if err != nil {
-		return &DesktopConversionResult{
-			Success:      false,
-			OutputPath:   "",
-			ErrorMessage: "Failed to open save dialog: " + err.Error(),
-			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+		if err != nil {
+			a.emitConversionResult(&DesktopConversionResult{
+				Success:      false,
+				OutputPath:   "",
+				ErrorMessage: "Failed to open save dialog: " + err.Error(),
+				DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+			})
+			return
 		}
-	}
 
-	if savePath == "" {
-		return &DesktopConversionResult{
-			Success:      false,
-			OutputPath:   "",
-			ErrorMessage: "USER_CANCELLED",
-			DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+		if savePath == "" {
+			a.emitConversionResult(&DesktopConversionResult{
+				Success:      false,
+				OutputPath:   "",
+				ErrorMessage: "USER_CANCELLED",
+				DurationMs:   time.Since(conversionStartTime).Milliseconds(),
+			})
+			return
 		}
-	}
 
-	// Spin off background goroutine to execute conversion
-	go a.executeBackgroundConversion(sourcePath, savePath, config, conversionStartTime)
-
-	return &DesktopConversionResult{
-		Success:      true,
-		OutputPath:   "",
-		ErrorMessage: "CONVERSION_STARTED",
-		DurationMs:   time.Since(conversionStartTime).Milliseconds(),
-	}
+		a.executeBackgroundConversion(sourcePath, savePath, config, conversionStartTime)
+	}()
 }
 
 // executeBackgroundConversion executes conversion in a background goroutine
 func (a *App) executeBackgroundConversion(sourcePath string, savePath string, config AppConfigMetadata, conversionStartTime time.Time) {
 	startTime := time.Now()
+
+	// Emit initial progress event to transition frontend to converting state
+	a.emitProgress("PARSING", 33.3)
 
 	// OS-level conversion switch
 	switch goos := goRuntime.GOOS; goos {
@@ -168,7 +175,7 @@ func (a *App) executeBackgroundConversion(sourcePath string, savePath string, co
 		sofficePath, err := getEmbeddedOfficePath()
 		if err != nil {
 			elapsedMs := time.Since(conversionStartTime).Milliseconds()
-			a.emitConversionComplete(&DesktopConversionResult{
+			a.emitConversionResult(&DesktopConversionResult{
 				Success:      false,
 				OutputPath:   "",
 				ErrorMessage: err.Error(),
@@ -180,7 +187,7 @@ func (a *App) executeBackgroundConversion(sourcePath string, savePath string, co
 		if !res.Success {
 			elapsedMs := time.Since(conversionStartTime).Milliseconds()
 			res.DurationMs = elapsedMs
-			a.emitConversionComplete(res)
+			a.emitConversionResult(res)
 			return
 		}
 
@@ -200,7 +207,7 @@ func (a *App) executeBackgroundConversion(sourcePath string, savePath string, co
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			elapsedMs := time.Since(conversionStartTime).Milliseconds()
-			a.emitConversionComplete(&DesktopConversionResult{
+			a.emitConversionResult(&DesktopConversionResult{
 				Success:      false,
 				OutputPath:   "",
 				ErrorMessage: fmt.Sprintf("Windows Word COM Automation failed: %s. Output: %s", err.Error(), string(output)),
@@ -211,7 +218,7 @@ func (a *App) executeBackgroundConversion(sourcePath string, savePath string, co
 
 	default:
 		elapsedMs := time.Since(conversionStartTime).Milliseconds()
-		a.emitConversionComplete(&DesktopConversionResult{
+		a.emitConversionResult(&DesktopConversionResult{
 			Success:      false,
 			OutputPath:   "",
 			ErrorMessage: "Unsupported operating system engine: " + goos,
@@ -221,7 +228,7 @@ func (a *App) executeBackgroundConversion(sourcePath string, savePath string, co
 	}
 
 	elapsedMs := time.Since(conversionStartTime).Milliseconds()
-	a.emitConversionComplete(&DesktopConversionResult{
+	a.emitConversionResult(&DesktopConversionResult{
 		Success:      true,
 		OutputPath:   savePath,
 		ErrorMessage: "",
@@ -229,15 +236,18 @@ func (a *App) executeBackgroundConversion(sourcePath string, savePath string, co
 	})
 }
 
-// emitConversionComplete emits the final conversion completion event to the Wails frontend
-func (a *App) emitConversionComplete(result *DesktopConversionResult) {
+// emitConversionResult emits the final conversion completion event to the Wails frontend
+func (a *App) emitConversionResult(result *DesktopConversionResult) {
+	if a.onConversionResult != nil {
+		a.onConversionResult(result)
+	}
 	if a.ctx == nil {
 		return
 	}
 	if flag.Lookup("test.v") != nil {
 		return
 	}
-	wailsruntime.EventsEmit(a.ctx, "conversion_complete", result)
+	wailsruntime.EventsEmit(a.ctx, "conversion_result", result)
 }
 
 // convertWithLibreOffice executes LibreOffice CLI to convert a DOCX file to PDF

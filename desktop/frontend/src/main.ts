@@ -12,7 +12,7 @@ declare global {
     go: {
       main: {
         App: {
-          ConvertFile: (sourcePath: string, config: main.AppConfigMetadata) => Promise<DesktopConversionResult>;
+          ConvertFile: (sourcePath: string, config: main.AppConfigMetadata) => Promise<void>;
         };
       };
     };
@@ -50,7 +50,7 @@ appElement.innerHTML = `
         <span class="progress-stage" id="progress-stage">Initializing...</span>
       </div>
       <div class="spinner-container">
-        <div class="spinner"></div>
+        <div class="infinite-spinner"></div>
       </div>
       <div class="progress-message" id="progress-message">Waiting to start conversion...</div>
     </div>
@@ -186,29 +186,12 @@ async function handleConversion(sourcePath: string) {
     preserveMetadata: true
   });
 
+  showState('converting');
+  resetProgress();
+
   try {
-    const initResult = await window.go.main.App.ConvertFile(sourcePath, config);
-
-    if (initResult.success) {
-      showState('converting');
-      resetProgress();
-    }
-
-    if (fileSelectBtn) {
-      fileSelectBtn.innerText = "Select File";
-    }
-    if (dropZoneSub) {
-      dropZoneSub.innerText = "Supports files up to 25MB";
-    }
-
-    if (!initResult.success) {
-      if (initResult.errorMessage === 'USER_CANCELLED') {
-        showState('idle');
-      } else {
-        errorDetail.innerText = initResult.errorMessage || 'Unknown conversion error occurred.';
-        showState('error');
-      }
-    }
+    // ConvertFile runs completely asynchronously and returns void
+    await window.go.main.App.ConvertFile(sourcePath, config);
   } catch (err: any) {
     if (fileSelectBtn) {
       fileSelectBtn.innerText = "Select File";
@@ -216,7 +199,7 @@ async function handleConversion(sourcePath: string) {
     if (dropZoneSub) {
       dropZoneSub.innerText = "Supports files up to 25MB";
     }
-
+    console.error("Infrastructure-level bridge error:", err);
     errorDetail.innerText = err?.message || err || 'An unexpected application bridge error occurred.';
     showState('error');
   }
@@ -258,7 +241,7 @@ OnFileDrop((_x: number, _y: number, paths: string[]) => {
 
 
 
-EventsOn("conversion_complete", (result: DesktopConversionResult) => {
+EventsOn("conversion_result", (result: DesktopConversionResult) => {
   const dropZoneSub = dropZone?.querySelector('p');
   if (fileSelectBtn) {
     fileSelectBtn.innerText = "Select File";
@@ -285,10 +268,14 @@ EventsOn("conversion_complete", (result: DesktopConversionResult) => {
     }, 300);
   } else {
     const errorMsg = result?.errorMessage || 'Unknown conversion error occurred.';
-    if (errorDetail) {
-      errorDetail.textContent = errorMsg;
+    if (errorMsg === 'USER_CANCELLED') {
+      showState('idle');
+    } else {
+      if (errorDetail) {
+        errorDetail.textContent = errorMsg;
+      }
+      showState('error');
     }
-    showState('error');
   }
 });
 

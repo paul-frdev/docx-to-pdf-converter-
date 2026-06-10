@@ -22,8 +22,15 @@ func TestGetEmbeddedOfficePath(t *testing.T) {
 func TestConvertFile_Validation(t *testing.T) {
 	app := NewApp()
 
+	// Set up channel to capture asynchronous results
+	ch := make(chan *DesktopConversionResult, 1)
+	app.onConversionResult = func(res *DesktopConversionResult) {
+		ch <- res
+	}
+
 	// Case 1: Non-existent file path
-	res := app.ConvertFile("nonexistent_file.docx", AppConfigMetadata{})
+	app.ConvertFile("nonexistent_file.docx", AppConfigMetadata{})
+	res := <-ch
 	if res.Success {
 		t.Error("Expected failure for non-existent file path, but got success")
 	}
@@ -44,7 +51,8 @@ func TestConvertFile_Validation(t *testing.T) {
 	}
 	tempFileLarge.Close()
 
-	res = app.ConvertFile(tempFileLarge.Name(), AppConfigMetadata{})
+	app.ConvertFile(tempFileLarge.Name(), AppConfigMetadata{})
+	res = <-ch
 	if res.Success {
 		t.Error("Expected failure for file exceeding 50MB, but got success")
 	}
@@ -66,7 +74,8 @@ func TestConvertFile_Validation(t *testing.T) {
 	}
 	tempFileInvalidSig.Close()
 
-	res = app.ConvertFile(tempFileInvalidSig.Name(), AppConfigMetadata{})
+	app.ConvertFile(tempFileInvalidSig.Name(), AppConfigMetadata{})
+	res = <-ch
 	if res.Success {
 		t.Error("Expected failure for file with invalid signature, but got success")
 	}
