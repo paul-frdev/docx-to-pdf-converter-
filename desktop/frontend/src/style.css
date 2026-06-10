@@ -2,12 +2,12 @@
   --bg-gradient: linear-gradient(135deg, #090d16 0%, #111827 50%, #070a10 100%);
   --glass-bg: rgba(17, 24, 39, 0.75);
   --glass-border: rgba(255, 255, 255, 0.06);
-  --glass-hover-border: rgba(56, 189, 248, 0.4);
+  --glass-hover-border: rgba(255, 255, 255, 0.15);
   
-  --primary-color: #0ea5e9;
-  --primary-glow: rgba(14, 165, 233, 0.45);
+  --primary-color: #e2e8f0;
+  --primary-glow: rgba(255, 255, 255, 0.1);
   --primary: var(--primary-color);
-  --accent: #818cf8;
+  --accent: #94a3b8;
   --success-color: #10b981;
   --success-glow: rgba(16, 185, 129, 0.45);
   --danger-color: #ef4444;
@@ -68,7 +68,7 @@ header h1 {
   font-size: 2.25rem;
   font-weight: 700;
   letter-spacing: -0.025em;
-  background: linear-gradient(to right, #f8fafc, #38bdf8, #818cf8);
+  background: linear-gradient(to right, #f8fafc, #cbd5e1, #94a3b8);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 0.5rem;
@@ -127,7 +127,7 @@ header p {
 }
 
 .custom-select:hover {
-  border-color: rgba(56, 189, 248, 0.3);
+  border-color: rgba(255, 255, 255, 0.15);
   background: rgba(30, 41, 59, 0.8);
 }
 
@@ -223,7 +223,7 @@ input:checked + .slider:before {
 
 .drop-zone.drag-over {
   border-color: var(--primary-color);
-  background: rgba(14, 165, 233, 0.06);
+  background: rgba(255, 255, 255, 0.02);
   box-shadow: 0 0 25px var(--primary-glow);
   transform: scale(1.01);
 }
@@ -245,7 +245,7 @@ input:checked + .slider:before {
 
 .drop-zone.drag-over .drop-zone-icon {
   background: var(--primary-color);
-  color: white;
+  color: #0f172a;
   transform: translateY(-5px);
   box-shadow: 0 5px 15px var(--primary-glow);
 }
@@ -305,40 +305,32 @@ input:checked + .slider:before {
   text-transform: uppercase;
 }
 
-.progress-percent {
-  font-size: 1.1rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+.spinner-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1.5rem 0;
 }
 
-.progress-bar-bg {
-  width: 100%;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
+.spinner,
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3.5px solid rgba(14, 165, 233, 0.1);
+  border-top-color: #0ea5e9;
+  border-right-color: #818cf8;
+  border-radius: 50%;
+  animation: spin 0.8s infinite linear;
+  margin: 1.5rem auto;
+  filter: drop-shadow(0 0 8px rgba(14, 165, 233, 0.45));
 }
 
-.progress-bar-fill,
-.progress-bar-fill.indeterminate {
-    width: 100% !important;
-    height: 12px !important;
-    background: linear-gradient(90deg, #0ea5e9 0%, #818cf8 25%, #0ea5e9 50%, #818cf8 75%, #0ea5e9 100%) !important;
-    background-size: 200% 100% !important;
-    animation: continuousPulse 1.2s infinite linear !important;
-    border-radius: 8px !important;
-    transition: none !important;
-    position: relative !important;
-    display: block !important;
-}
-
-@keyframes continuousPulse {
+@keyframes spin {
   0% {
-    background-position: 200% 0;
+    transform: rotate(0deg);
   }
   100% {
-    background-position: 0 0;
+    transform: rotate(360deg);
   }
 }
 
@@ -427,12 +419,12 @@ input:checked + .slider:before {
 
 .btn-primary {
   background: var(--primary-color);
-  color: white;
+  color: #0f172a;
   box-shadow: 0 4px 14px var(--primary-glow);
 }
 
 .btn-primary:hover {
-  background: #38bdf8;
+  background: #f8fafc;
   transform: translateY(-1px);
   box-shadow: 0 6px 20px var(--primary-glow);
 }
@@ -477,8 +469,8 @@ input:checked + .slider:before {
 
 /* This guarantees Chromium drops layout interception, letting the OS pass the file directly to Wails */
 .drop-zone.dragging-active {
-    border-color: #818cf8 !important;
-    background: rgba(129, 140, 248, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    background: rgba(255, 255, 255, 0.03) !important;
     pointer-events: none !important; 
 }
 .drop-zone * {

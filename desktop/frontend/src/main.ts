@@ -48,10 +48,9 @@ appElement.innerHTML = `
     <div class="progress-panel hidden" id="progress-panel">
       <div class="progress-header">
         <span class="progress-stage" id="progress-stage">Initializing...</span>
-        <span class="progress-percent" id="progress-percent"></span>
       </div>
-      <div class="progress-bar-bg">
-        <div class="progress-bar-fill" id="progress-bar-fill"></div>
+      <div class="spinner-container">
+        <div class="spinner"></div>
       </div>
       <div class="progress-message" id="progress-message">Waiting to start conversion...</div>
     </div>
@@ -87,8 +86,6 @@ const fileSelectBtn = document.getElementById('file-select-btn') as HTMLButtonEl
 
 const progressPanel = document.getElementById('progress-panel') as HTMLDivElement;
 const progressStage = document.getElementById('progress-stage') as HTMLSpanElement;
-const progressPercent = document.getElementById('progress-percent') as HTMLSpanElement;
-const progressBarFill = document.getElementById('progress-bar-fill') as HTMLDivElement;
 const progressMessage = document.getElementById('progress-message') as HTMLDivElement;
 
 const successPanel = document.getElementById('success-panel') as HTMLDivElement;
@@ -160,13 +157,6 @@ function resetProgress() {
   if (successTimeoutId) {
     clearTimeout(successTimeoutId);
     successTimeoutId = null;
-  }
-  if (progressBarFill) {
-    progressBarFill.classList.remove('indeterminate');
-  }
-  if (progressPercent) {
-    progressPercent.style.display = 'none';
-    progressPercent.textContent = '';
   }
   if (progressStage) {
     progressStage.innerText = 'Initializing...';
@@ -278,13 +268,6 @@ EventsOn("conversion_complete", (result: DesktopConversionResult) => {
   }
 
   if (result && result.success) {
-    if (progressBarFill) {
-      progressBarFill.classList.remove('indeterminate');
-    }
-    if (progressPercent) {
-      progressPercent.style.display = 'none';
-      progressPercent.textContent = '';
-    }
     if (progressMessage) {
       progressMessage.textContent = "Conversion Complete!";
     }
@@ -316,10 +299,6 @@ EventsOn('conversion_progress', (data: ConversionProgress) => {
 
   if (progressStage) {
     progressStage.innerText = data.stage || '';
-  }
-  if (progressPercent) {
-    progressPercent.style.display = 'none';
-    progressPercent.textContent = '';
   }
 
   if (stage === 'PARSING') {
