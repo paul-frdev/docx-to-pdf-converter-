@@ -208,7 +208,10 @@ func (a *App) executeBackgroundConversion(sourcePath string, savePath string, co
 		}
 
 		// Fallback to Windows COM Automation via powershell script
-		psCmd := fmt.Sprintf(`$word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open('%s'); $doc.SaveAs([ref] '%s', [ref] 17); $doc.Close(); $word.Quit();`, sourcePath, savePath)
+		// Escape single quotes in paths to prevent PowerShell syntax/injection issues
+		escapedSource := strings.ReplaceAll(sourcePath, "'", "''")
+		escapedSave := strings.ReplaceAll(savePath, "'", "''")
+		psCmd := fmt.Sprintf(`$word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open('%s'); $doc.SaveAs([ref] '%s', [ref] 17); $doc.Close(); $word.Quit();`, escapedSource, escapedSave)
 		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psCmd)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
